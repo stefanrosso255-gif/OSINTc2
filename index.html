@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSINT // Phone & Email Scanner</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #000;
+            color: #00ff41;
+            font-family: 'Courier New', Courier, monospace;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 40px 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+        #matrix-canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: -99; 
+            pointer-events: none;
+            opacity: 0.5;
+        }
+        .terminal-container {
+            background: rgba(5, 5, 5, 0.95);
+            border: 1px solid #00ff41;
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.2);
+            padding: 30px;
+            border-radius: 5px;
+            width: 950px;
+            max-width: 95%;
+            text-align: center;
+            position: relative;
+            z-index: 10;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px #00ff41;
+        }
+        .input-group { display: flex; gap: 10px; margin-bottom: 30px; }
+        
+        select {
+            padding: 15px;
+            background: #001100;
+            color: #00ff41;
+            border: 1px solid #00ff41;
+            font-family: inherit;
+            font-size: 16px;
+            outline: none;
+            cursor: pointer;
+        }
+        select option { background: #000; color: #00ff41; }
+
+        input[type="text"] {
+            flex-grow: 1;
+            padding: 15px;
+            background: #001100;
+            border: 1px solid #00ff41;
+            color: #00ff41;
+            font-family: inherit;
+            font-size: 16px;
+            outline: none;
+        }
+        button {
+            padding: 15px 30px;
+            background: transparent;
+            color: #00ff41;
+            border: 1px solid #00ff41;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: 0.3s;
+        }
+        button:hover { background: #00ff41; color: #000; }
+        
+        #loading-screen {
+            display: none;
+            text-align: left;
+            margin-top: 20px;
+            padding: 20px;
+            border-left: 3px solid #00ff41;
+            background: rgba(0, 255, 65, 0.05);
+        }
+        #loading-screen p { margin-bottom: 10px; font-size: 15px; animation: blink 1.5s infinite; }
+        .progress-bar-container { width: 100%; height: 10px; background-color: #002200; border: 1px solid #00ff41; margin-top: 15px; overflow: hidden; }
+        .progress-bar { height: 100%; background-color: #00ff41; width: 0%; animation: progress 30s linear forwards; box-shadow: 0 0 10px #00ff41; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes progress { 0% { width: 0%; } 50% { width: 70%; } 100% { width: 99%; } }
+        
+        .results-header { text-align: left; margin-bottom: 15px; border-bottom: 1px solid #008f11; padding-bottom: 10px; font-size: 14px; }
+        .card-grid { display: grid; grid-template-columns: 1fr; gap: 15px; text-align: left; }
+        
+        .result-card {
+            background: rgba(0, 20, 0, 0.6);
+            border: 1px solid #008f11;
+            border-left: 4px solid #00ff41;
+            padding: 15px;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+        }
+        .card-platform { font-weight: bold; font-size: 16px; color: #fff; margin-bottom: 8px; text-shadow: 0 0 5px #00ff41; border-bottom: 1px dashed #008f11; padding-bottom: 5px; }
+        
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            color: #00ff41;
+            margin: 0;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="matrix-canvas"></canvas>
+    
+    <div class="terminal-container">
+        <h1>SYSTEM_ACCESS // MULTI-TOOL</h1>
+        
+        <form action="/" method="POST" id="search-form">
+            <div class="input-group">
+                <select name="search_type" id="search-type-select">
+                    <option value="phone" {% if search_type == 'phone' %}selected{% endif %}>Phone</option>
+                    <option value="email" {% if search_type == 'email' %}selected{% endif %}>Email</option>
+                </select>
+                
+                <input type="text" name="target" id="target-input" placeholder="[ENTER TARGET]" required autocomplete="off" value="{{ target or '' }}">
+                
+                <button type="submit" id="search-btn">[ EXECUTE ]</button>
+            </div>
+        </form>
+        
+        <div id="loading-screen">
+            <p>> INITIALIZING DEEP SCAN PROTOCOLS...</p>
+            <p>> EXECUTING MODULE: <span id="loading-type" style="color:#fff;"></span></p>
+            <p style="color: #008f11; font-size: 12px;">Please wait... This can take up to 60 seconds.</p>
+            <div class="progress-bar-container"><div class="progress-bar"></div></div>
+        </div>
+        
+        <div id="results-section">
+            {% if rezultate is not none and target %}
+                <div class="results-header">
+                    > TARGET LOCKED: <strong>{{ target }}</strong> <br>
+                    > MODULE USED: {{ search_type|upper }} <br>
+                    > FOUND {{ rezultate|length }} RESULTS
+                </div>
+                
+                {% if rezultate %}
+                    <div class="card-grid">
+                        {% for item in rezultate %}
+                            <div class="result-card">
+                                <div class="card-platform">{{ item.platform }}</div>
+                                <pre>{{ item.url }}</pre>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p style="text-align: left; color: #008f11;">> No results found.</p>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('matrix-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()';
+        const fontSize = 16;
+        const columns = canvas.width / fontSize;
+        const drops = [];
+        for (let x = 0; x < columns; x++) drops[x] = 1;
+        
+        function draw() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#00ff41';
+            ctx.font = fontSize + 'px monospace';
+            for (let i = 0; i < drops.length; i++) {
+                const text = letters.charAt(Math.floor(Math.random() * letters.length));
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+                drops[i]++;
+            }
+        }
+        setInterval(draw, 33);
+
+        const selectType = document.getElementById('search-type-select');
+        const targetInput = document.getElementById('target-input');
+        const loadingScreen = document.getElementById('loading-screen');
+        const resultsSection = document.getElementById('results-section');
+        const searchBtn = document.getElementById('search-btn');
+        const loadingType = document.getElementById('loading-type');
+
+        function updatePlaceholder() {
+            const type = selectType.value;
+            targetInput.value = ''; 
+            if (type === 'phone') targetInput.placeholder = "[ENTER PHONE: +40712345678]";
+            else if (type === 'email') targetInput.placeholder = "[ENTER EMAIL: example@domain.com]";
+        }
+        
+        selectType.addEventListener('change', updatePlaceholder);
+        if (!targetInput.value) updatePlaceholder();
+
+        document.getElementById('search-form').addEventListener('submit', function(e) {
+            loadingScreen.style.display = 'block';
+            resultsSection.style.display = 'none';
+            searchBtn.disabled = true;
+            searchBtn.innerText = "[ SCANNING... ]";
+            searchBtn.style.opacity = "0.5";
+            loadingType.innerText = selectType.options[selectType.selectedIndex].text.toUpperCase();
+        });
+    </script>
+</body>
+</html>

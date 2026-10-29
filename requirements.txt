@@ -1,0 +1,6 @@
+requests
+phonenumbers
+whois
+exifread
+shodan
+beautifulsoup4
